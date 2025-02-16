@@ -1,0 +1,227 @@
+----------------------------------------------------------
+-- Services และการตั้งค่าเบื้องต้น
+----------------------------------------------------------
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local DataStoreService = game:GetService("DataStoreService")
+local TweenService = game:GetService("TweenService")
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+local placeId = game.PlaceId
+
+----------------------------------------------------------
+-- ข้อมูล Party (Config)
+----------------------------------------------------------
+local partyData = {
+    partyName = "",
+    hostJobId = "",
+    isCreated = false,
+    partyMembers = {}
+}
+
+local partyDataStore = DataStoreService:GetDataStore("PartyData")
+
+----------------------------------------------------------
+-- Function: Auto Save Config ลงใน DataStore
+----------------------------------------------------------
+local function savePartyData()
+    local success, errorMessage = pcall(function()
+        partyDataStore:SetAsync(localPlayer.UserId, partyData)
+    end)
+    if success then
+        print("Party data saved successfully.")
+    else
+        warn("Failed to save party data: " .. errorMessage)
+    end
+end
+
+local function loadPartyData()
+    local success, retrievedData = pcall(function()
+        return partyDataStore:GetAsync(localPlayer.UserId)
+    end)
+    if success and retrievedData then
+        partyData = retrievedData
+        updatePartyIcons()
+        print("Party data loaded successfully.")
+    else
+        warn("Failed to load party data.")
+    end
+end
+
+----------------------------------------------------------
+-- Function: Update Party Icons ใน UI
+----------------------------------------------------------
+local function updatePartyIcons()
+    for _, child in pairs(partySlotHolder:GetChildren()) do
+        if child:IsA("ImageLabel") then
+            child:Destroy()
+        end
+    end
+
+    for i, member in ipairs(partyData.partyMembers) do
+        local thumb, isReady = Players:GetUserThumbnailAsync(member.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+        local icon = Instance.new("ImageLabel")
+        icon.Name = member.Name .. "_Icon"
+        icon.Size = UDim2.new(0, 32, 0, 32)
+        icon.Position = UDim2.new(0, (i - 1) * 38, 0, 0)
+        icon.Image = thumb
+        icon.BackgroundColor3 = Color3.new(1, 1, 1)
+        icon.Parent = partySlotHolder
+    end
+end
+
+----------------------------------------------------------
+-- Function: Invite Friends
+----------------------------------------------------------
+local function inviteFriend(playerName)
+    local friend = Players:FindFirstChild(playerName)
+    if friend then
+        table.insert(partyData.partyMembers, {Name = friend.Name, UserId = friend.UserId})
+        updatePartyIcons()
+        savePartyData()
+        print(friend.Name .. " invited to the party!")
+    else
+        print("Player not found.")
+    end
+end
+
+----------------------------------------------------------
+-- Function: Notify Join/Leave Party
+----------------------------------------------------------
+local function notifyJoinLeave(action, playerName)
+    local notification = Instance.new("TextLabel")
+    notification.Size = UDim2.new(0, 200, 0, 30)
+    notification.Position = UDim2.new(0.5, -100, 0, 10)
+    notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    notification.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notification.Font = Enum.Font.GothamBold
+    notification.TextSize = 14
+    notification.Text = playerName .. " has " .. action .. " the party."
+    notification.Parent = partyGUI
+
+    game.Debris:AddItem(notification, 3)
+end
+
+----------------------------------------------------------
+-- Function: Kick Party Member
+----------------------------------------------------------
+local function kickMember(playerName)
+    for i, member in ipairs(partyData.partyMembers) do
+        if member.Name == playerName then
+            table.remove(partyData.partyMembers, i)
+            updatePartyIcons()
+            savePartyData()
+            print(playerName .. " has been kicked from the party.")
+            break
+        end
+    end
+end
+
+----------------------------------------------------------
+-- Function: Animate Button
+----------------------------------------------------------
+local function animateButton(button)
+    local goal = {}
+    goal.Size = button.Size + UDim2.new(0, 10, 0, 10)
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, true)
+    local tween = TweenService:Create(button, tweenInfo, goal)
+    button.MouseEnter:Connect(function()
+        tween:Play()
+    end)
+    button.MouseLeave:Connect(function()
+        tween:Cancel()
+        button.Size = button.Size - UDim2.new(0, 10, 0, 10)
+    end)
+end
+
+----------------------------------------------------------
+-- สร้าง UI หลัก: Party Manager
+----------------------------------------------------------
+local partyGUI = Instance.new("ScreenGui")
+partyGUI.Name = "PartyGUI"
+partyGUI.ResetOnSpawn = false
+partyGUI.Enabled = true
+partyGUI.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 100)
+mainFrame.Position = UDim2.new(0, 50, 0, 100)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.Parent = partyGUI
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, -40, 0, 30)
+titleLabel.Position = UDim2.new(0, 10, 0, 10)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Party Manager"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 14
+titleLabel.Parent = mainFrame
+
+local wifiIcon = Instance.new("TextLabel")
+wifiIcon.Name = "WifiIcon"
+wifiIcon.Size = UDim2.new(0, 24, 0, 24)
+wifiIcon.Position = UDim2.new(1, -30, 0, 10)
+wifiIcon.BackgroundTransparency = 1
+wifiIcon.Text = "📶"
+wifiIcon.TextColor3 = Color3.fromRGB(255, 0, 0)
+wifiIcon.Font = Enum.Font.GothamBold
+wifiIcon.TextSize = 14
+wifiIcon.Parent = mainFrame
+
+local partySlotHolder = Instance.new("Frame")
+partySlotHolder.Name = "PartySlotHolder"
+partySlotHolder.Size = UDim2.new(1, -20, 0, 40)
+partySlotHolder.Position = UDim2.new(0, 10, 0, 50)
+partySlotHolder.BackgroundTransparency = 1
+partySlotHolder.Parent = mainFrame
+
+local plusButton = Instance.new("TextButton")
+plusButton.Name = "PlusButton"
+plusButton.Size = UDim2.new(0, 32, 0, 32)
+plusButton.Position = UDim2.new(1, -42, 0, 50)
+plusButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+plusButton.Text = "+"
+plusButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+plusButton.Font = Enum.Font.GothamBold
+plusButton.TextSize = 24
+plusButton.Parent = mainFrame
+
+animateButton(plusButton)
+
+----------------------------------------------------------
+-- Frame สำหรับเมนู: Create Party / Join Party
+----------------------------------------------------------
+local partyOptionsFrame = Instance.new("Frame")
+partyOptionsFrame.Name = "PartyOptionsFrame"
+partyOptionsFrame.Size = UDim2.new(0, 300, 0, 120)
+partyOptionsFrame.Position = UDim2.new(0, 50, 0, 210)
+partyOptionsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+partyOptionsFrame.Visible = false
+partyOptionsFrame.Parent = partyGUI
+
+local createPartyButton = Instance.new("TextButton")
+createPartyButton.Name = "CreatePartyButton"
+createPartyButton.Size = UDim2.new(0, 120, 0, 40)
+createPartyButton.Position = UDim2.new(0, 10, 0, 10)
+createPartyButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+createPartyButton.Text = "Create Party"
+createPartyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+createPartyButton.Font = Enum.Font.GothamBold
+createPartyButton.TextSize = 14
+createPartyButton.Parent = partyOptionsFrame
+
+local joinPartyButton = Instance.new("TextButton")
+joinPartyButton.Name = "JoinPartyButton"
+joinPartyButton.Size = UDim2.new(0, 120, 0, 40)
+joinPartyButton.Position = UDim2.new(0, 160, 0, 10)
+joinPartyButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+joinPartyButton.Text = "Join Party"
+joinPartyButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+joinPartyButton.Font = Enum.Font.GothamBold
+joinPartyButton.TextSize = 14
+joinPartyButton
