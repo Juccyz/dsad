@@ -1,2 +1,1 @@
-getgenv().key = '056ef5b9-1296-46f3-bc0e-7dc3314f0c53'
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Xenon-Trash/Loader/main/Loader.lua'))()
+
